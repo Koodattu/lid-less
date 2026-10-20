@@ -1,7 +1,8 @@
 import AppKit
 import LidLessCore
+import ServiceManagement
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let worker = WorkerSession()
     private lazy var controller = SessionController(power: worker)
     private let sensor = LidAngleSensor()
@@ -9,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let gestureStatus = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let toggle = NSMenuItem(title: "Arm for Next Close", action: #selector(toggleSession), keyEquivalent: "")
+    private let loginService = SMAppService.mainApp
+    private let launchAtLogin = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+    private let loginSettings = NSMenuItem(title: "Open Login Settings…", action: #selector(openLoginSettings), keyEquivalent: "")
     private var timer: Timer?
     private var battery: (percent: Int?, onAC: Bool?) = (nil, nil)
     private var nextBatteryRead: TimeInterval = 0
@@ -27,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "Lid Less")
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = self
         let title = NSMenuItem(title: "Lid Less · Experimental", action: nil, keyEquivalent: "")
         title.isEnabled = false
         status.isEnabled = false
@@ -41,6 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         limits.isEnabled = false
         menu.addItem(limits)
         menu.addItem(.separator())
+        launchAtLogin.target = self
+        loginSettings.target = self
+        menu.addItem(launchAtLogin)
+        menu.addItem(loginSettings)
+        updateLoginMenu()
+        menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Lid Less", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -50,6 +61,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer.tolerance = 0.03
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        updateLoginMenu()
+    }
+
+    private func updateLoginMenu() {
+        let loginStatus = loginService.status
+        launchAtLogin.title = "Launch at Login"
+        launchAtLogin.state = .off
+        launchAtLogin.isEnabled = true
+        launchAtLogin.toolTip = nil
+        loginSettings.isHidden = loginStatus != .requiresApproval
+        switch loginStatus {
+        case .enabled:
+            launchAtLogin.state = .on
+        case .requiresApproval:
+            launchAtLogin.state = .mixed
+            launchAtLogin.title = "Launch at Login (Approval Required)"
+        case .notRegistered:
+            break
+        case .notFound:
+            launchAtLogin.isEnabled = false
+            launchAtLogin.toolTip = "macOS cannot find this login item. Run Lid Less from Applications."
+        @unknown default:
+            launchAtLogin.isEnabled = false
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            switch loginService.status {
+            case .enabled, .requiresApproval:
+                try loginService.unregister()
+            case .notRegistered:
+                try loginService.register()
+            default:
+                break
+            }
+        } catch {
+            // Login preferences must not pause gestures or alter a keep-awake session.
+            let alert = NSAlert()
+            alert.messageText = "Could not change Launch at Login"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
+        updateLoginMenu()
+    }
+
+    @objc private func openLoginSettings() {
+        SMAppService.openSystemSettingsLoginItems()
     }
 
     private func tick() {

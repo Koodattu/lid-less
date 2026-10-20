@@ -12,6 +12,8 @@ Keep your MacBook working with the lid closed. A tiny native menu bar app with n
 
 Reopen the lid to end the session, or choose **Disarm / Restore Sleep**. Quitting also restores normal lid handling. Sessions stop after eight hours, at 15% battery while unplugged, or at critical temperature. Screen-lock settings stay unchanged.
 
+Enable **Launch at Login** in the menu to start Lid Less automatically when you sign in. It starts disarmed. If the menu shows **Approval Required**, choose **Open Login Settings…** to allow it in macOS. Click the toggle again to turn automatic launching off.
+
 The download is ad-hoc signed, **not Apple-notarized**. If macOS blocks it, see [Apple's instructions for opening an app you trust](https://support.apple.com/en-us/102445), or build from source below.
 
 ## Compatibility
