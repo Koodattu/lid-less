@@ -35,11 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.openLoginSettings = { SMAppService.openSystemSettingsLoginItems() }
         model.quit = { NSApp.terminate(nil) }
         model.copyDiagnostics = { [weak self] in self?.copyDiagnostics() }
-        updater = UpdateController(model: model, canUpdate: { [weak self] in self?.controller.state == .idle })
-        model.checkForUpdates = { [weak self] in
-            self?.popover.performClose(nil)
-            self?.updater.checkForUpdates()
-        }
+        updater = UpdateController(model: model, canUpdate: { [weak self] in self?.controller.state == .idle },
+                                   presentUpdates: { [weak self] in self?.showPopover() })
+        model.checkForUpdates = { [weak self] in self?.updater.checkForUpdates() }
+        model.installUpdate = { [weak self] in self?.updater.installUpdate() }
+        model.cancelUpdate = { [weak self] in self?.updater.cancelUpdate() }
         model.changeAutomaticUpdates = { [weak self] enabled in self?.updater.setAutomaticChecks(enabled) }
         updater.start()
         refreshLoginStatus()
@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 throw SessionError("The keep-awake worker exited. The lid override has been cleared.")
             }
             try controller.tick(now: now, lidClosed: SystemPower.lidClosed(), angle: angle,
-                                optionHeld: model.gestureEnabled && !model.gesturePaused && !model.isUpdating && NSEvent.modifierFlags.contains(.option),
+                                optionHeld: model.gestureEnabled && !model.gesturePaused && !model.updateBlocksArming && NSEvent.modifierFlags.contains(.option),
                                 batteryPercent: battery.percent, onAC: battery.onAC,
                                 thermalCritical: ProcessInfo.processInfo.thermalState == .critical)
         } catch { reportPowerError(error) }
@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func toggleSession() {
-        guard !model.isUpdating else { return }
+        guard !model.sessionActionDisabled else { return }
         do {
             if controller.state == .idle {
                 battery = SystemPower.battery()

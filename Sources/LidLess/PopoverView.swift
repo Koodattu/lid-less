@@ -6,7 +6,6 @@ struct PopoverView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var showPreferences = false
     @State private var showAbout = false
     private let buttonAccent = Color(red: 0.11, green: 0.43, blue: 0.34)
@@ -24,8 +23,10 @@ struct PopoverView: View {
         VStack(spacing: 0) {
             header
             ScrollView {
-                VStack(spacing: 18) {
-                    if showPreferences {
+                VStack(spacing: 14) {
+                    if model.showUpdates {
+                        updates
+                    } else if showPreferences {
                         preferences
                     } else if showAbout {
                         about
@@ -35,9 +36,10 @@ struct PopoverView: View {
                         if let error = model.powerError { errorMessage(error) }
                         durations
                         primaryAction
-                        Text(model.gestureDescription)
+                        Text(model.updateBlocksArming ? "Finish or cancel the update in Updates to arm." : model.gestureDescription)
                             .font(.caption).foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .frame(height: 32)
                         powerSummary
                     }
                 }
@@ -45,28 +47,25 @@ struct PopoverView: View {
             }
             footer
         }
-        .frame(width: 356, height: showPreferences || showAbout ? 460 : (model.showWelcome || model.powerError != nil ? 600 : 480))
+        .frame(width: 356, height: 540)
         .background(reduceTransparency ? Color(nsColor: .windowBackgroundColor) : Color.clear)
         .tint(accent)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.phase)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showPreferences)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.duration)
     }
 
     private var header: some View {
         HStack {
-            Text(showPreferences ? "Preferences" : (showAbout ? "About Lid Less" : "Lid Less")).font(.system(size: 14, weight: .semibold))
+            Text(model.showUpdates ? "Updates" : (showPreferences ? "Preferences" : (showAbout ? "About Lid Less" : "Lid Less"))).font(.system(size: 14, weight: .semibold))
             Spacer()
-            if !showPreferences && !showAbout { Text(phaseLabel).font(.caption).foregroundStyle(.secondary) }
+            if !showPreferences && !showAbout && !model.showUpdates { Text(phaseLabel).font(.caption).foregroundStyle(.secondary) }
             Button {
-                if showPreferences || showAbout { showPreferences = false; showAbout = false }
+                if showPreferences || showAbout || model.showUpdates { showPreferences = false; showAbout = false; model.showUpdates = false }
                 else { showPreferences = true }
             } label: {
-                Image(systemName: showPreferences || showAbout ? "xmark" : "slider.horizontal.3").frame(width: 24, height: 24)
+                Image(systemName: showPreferences || showAbout || model.showUpdates ? "xmark" : "slider.horizontal.3").frame(width: 24, height: 24)
             }
-            .buttonStyle(.borderless).accessibilityLabel(showPreferences || showAbout ? "Back to session" : "Preferences")
+            .buttonStyle(.borderless).accessibilityLabel(showPreferences || showAbout || model.showUpdates ? "Back to session" : "Preferences")
             .keyboardShortcut(",", modifiers: .command)
-            .help(showPreferences || showAbout ? "Back to session" : "Preferences")
+            .help(showPreferences || showAbout || model.showUpdates ? "Back to session" : "Preferences")
         }.padding(.horizontal, 22).padding(.vertical, 16)
     }
 
@@ -85,20 +84,23 @@ struct PopoverView: View {
                 .frame(width: 94, height: 66).padding(.top, 12).padding(.bottom, 5)
                 .accessibilityHidden(true)
             Text(model.title).font(.system(size: 23, weight: .semibold, design: .rounded))
-                .tracking(-0.5).multilineTextAlignment(.center)
-            if model.phase == .armed || model.phase == .active {
-                Text(model.countdown).monospacedDigit().font(.callout)
-                    .foregroundStyle(model.phase == .armed ? Color.secondary : accent)
-                    .contentTransition(.numericText())
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.secondsRemaining)
-                if model.phase == .active {
-                    Text("Lid closed · Keep-awake requested").font(.caption).foregroundStyle(.secondary)
+                .tracking(-0.5).multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.85)
+                .frame(height: 30)
+            VStack(spacing: 4) {
+                if model.phase == .armed || model.phase == .active {
+                    Text(model.countdown).monospacedDigit().font(.callout)
+                        .foregroundStyle(model.phase == .armed ? Color.secondary : accent)
+                        .contentTransition(.numericText())
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.secondsRemaining)
+                    if model.phase == .active {
+                        Text("Lid closed · Keep-awake requested").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text(model.phase == .recovery ? "Retry before closing your Mac." : model.message)
+                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
-            } else {
-                Text(model.phase == .recovery ? "Retry before closing your Mac." : model.message)
-                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
-        }.frame(maxWidth: .infinity)
+            }.frame(height: 42, alignment: .top)
+        }.frame(maxWidth: .infinity).frame(height: 176)
     }
 
     private var durations: some View {
@@ -116,29 +118,20 @@ struct PopoverView: View {
                     .accessibilityLabel("\(AppModel.durationLabel(duration)) session limit")
                     .accessibilityAddTraits(model.duration == duration ? .isSelected : [])
                 }
-            }.disabled(model.phase != .idle || model.isUpdating)
+            }.disabled(model.phase != .idle)
+                .help(model.phase == .idle ? "Duration for your next session" : "End the session to change its duration")
         }
     }
 
-    @ViewBuilder private var primaryAction: some View {
-        if #available(macOS 26, *), !reduceTransparency {
-            actionButton.buttonStyle(.glassProminent)
-        } else {
-            actionButton.buttonStyle(.borderedProminent)
-        }
-    }
-
-    private var actionButton: some View {
+    private var primaryAction: some View {
         Button(action: model.toggleSession) {
             Label(model.actionTitle, systemImage: model.symbol)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(controlActiveState == .inactive ? Color.primary : Color.white)
-                .frame(maxWidth: .infinity).padding(.vertical, 5)
+                .frame(maxWidth: .infinity).frame(height: 40)
         }
-        .controlSize(.large)
-        .tint(buttonAccent)
+        .buttonStyle(SessionActionStyle(tint: buttonAccent))
         .keyboardShortcut(.return, modifiers: [])
-        .disabled(model.isUpdating)
+        .disabled(model.sessionActionDisabled)
     }
 
     private var powerSummary: some View {
@@ -179,7 +172,7 @@ struct PopoverView: View {
             }.disabled(model.phase != .idle)
             Divider()
             preferenceToggle("Check for updates automatically", isOn: Binding(get: { model.automaticUpdates }, set: model.changeAutomaticUpdates))
-            Text("Updates ask before installing. Active sessions are never interrupted.")
+            Text("Checks run without interrupting your session. Installation waits until it ends.")
                 .font(.caption).foregroundStyle(.secondary)
             Button("Show quick start") { model.showWelcome = true; showPreferences = false }
             if let error = model.preferenceError { errorMessage(error) }
@@ -188,6 +181,41 @@ struct PopoverView: View {
 
     private func preferenceToggle(_ label: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) { Text(label).frame(maxWidth: .infinity, alignment: .leading) }
+    }
+
+    private var updates: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "arrow.down.circle").font(.system(size: 42, weight: .light))
+                .foregroundStyle(accent).padding(.top, 24).accessibilityHidden(true)
+            Text(model.updateTitle).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
+            Text("Installed version \(model.version)").font(.caption).foregroundStyle(.secondary)
+            if model.updatePhase == .checking || model.updatePhase == .downloading || model.updatePhase == .extracting || model.updatePhase == .installing {
+                if let progress = model.updateProgress {
+                    ProgressView(value: progress).accessibilityLabel("Update progress")
+                    Text(progress, format: .percent.precision(.fractionLength(0))).monospacedDigit().font(.caption)
+                } else { ProgressView().controlSize(.small).accessibilityLabel(model.updateTitle) }
+            }
+            Text(model.updateStatus ?? "Signed updates, downloaded from GitHub.")
+                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if model.canInstallUpdate {
+                Button(model.updatePhase == .installing ? "Retry Restart" : (model.updatePhase == .ready ? "Install & Restart" : "Download Update"), action: model.installUpdate)
+                    .buttonStyle(.borderedProminent).disabled(model.phase != .idle)
+                if model.phase != .idle {
+                    Text("End your keep-awake session to install.").font(.caption).foregroundStyle(.secondary)
+                    Button("Back to Session") { model.showUpdates = false; showPreferences = false; showAbout = false }
+                }
+            }
+            if model.canCancelUpdate {
+                Button(model.updatePhase == .available ? "Not Now" : "Cancel Update", action: model.cancelUpdate)
+                    .buttonStyle(.bordered)
+            } else if [.idle, .finished, .failed].contains(model.updatePhase) {
+                Button("Check for Updates", action: model.checkForUpdates)
+                    .buttonStyle(.bordered).disabled(!model.canCheckForUpdates)
+            }
+            Link("Release notes on GitHub", destination: URL(string: "https://github.com/Koodattu/lid-less/releases")!)
+                .font(.caption)
+        }.frame(maxWidth: .infinity)
     }
 
     private var about: some View {
@@ -215,18 +243,29 @@ struct PopoverView: View {
 
     private var footer: some View {
         VStack(spacing: 8) {
-            if let status = model.updateStatus { Text(status).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center) }
             HStack {
-                Button("About") { showAbout.toggle(); showPreferences = false }
+                Button("About") { showAbout.toggle(); showPreferences = false; model.showUpdates = false }
                 Spacer()
-                Button("Check for Updates…", action: model.checkForUpdates)
-                    .disabled(!model.canCheckForUpdates || model.phase != .idle)
+                Button(model.updatePhase == .available ? "Update Available" : "Updates") {
+                    model.showUpdates = true; showPreferences = false; showAbout = false
+                }
                 Spacer()
                 Button("Quit", action: model.quit).keyboardShortcut("q")
             }.font(.caption).buttonStyle(.borderless)
         }
         .padding(.horizontal, 22).padding(.vertical, 12)
         .background(Color.primary.opacity(0.035))
+    }
+}
+
+private struct SessionActionStyle: ButtonStyle {
+    let tint: Color
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.foregroundStyle(.white)
+            .background(tint.opacity(configuration.isPressed ? 0.8 : 1), in: Capsule())
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 

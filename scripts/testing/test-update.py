@@ -13,7 +13,7 @@ import uuid
 import sys
 
 mode = sys.argv[1] if len(sys.argv) > 1 else 'valid'
-assert mode in ['valid', 'bad-feed', 'bad-archive']
+assert mode in ['valid', 'bad-feed', 'bad-archive', 'cancel-check', 'cancel-ready']
 root = Path(__file__).resolve().parents[2]
 source = root / '.build/preview/Lid Less.app'
 tools = root / '.build/artifacts/sparkle/Sparkle/bin'
@@ -25,6 +25,10 @@ def run(*args):
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args): pass
+    def do_GET(self):
+        if mode == 'cancel-check' and self.path == '/appcast.xml': time.sleep(1)
+        try: super().do_GET()
+        except (BrokenPipeError, ConnectionResetError): pass
 
 server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(QuietHandler, directory=str(work / 'feed')))
 threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -40,7 +44,7 @@ for folder, version in [('installed', '1'), ('candidate', '2')]:
     info = plistlib.loads(plist.read_bytes())
     info.update(CFBundleIdentifier=identifier, CFBundleName='Update Fixture', CFBundleDisplayName='Update Fixture',
                 CFBundleVersion=version, CFBundleShortVersionString=f'0.0.{version}',
-                SUFeedURL=url+'appcast.xml', FixtureResultPath=str(result),
+                SUFeedURL=url+'appcast.xml', FixtureResultPath=str(result), FixtureMode=mode,
                 NSAppTransportSecurity={'NSAllowsLocalNetworking': True})
     plist.write_bytes(plistlib.dumps(info))
     run('codesign', '--force', '--sign', '-', target)
@@ -69,6 +73,10 @@ try:
         assert result.exists(), 'Updated app did not relaunch; inspect fixture.log'
         assert info['CFBundleVersion'] == '2', 'Bundle was not replaced'
         print('PASS: signed feed, download, validation, replacement, and relaunch of ad-hoc app.', flush=True)
+    elif mode.startswith('cancel-'):
+        assert result.exists() and result.read_text() == 'Canceled without reopening'
+        assert info['CFBundleVersion'] == '1', 'Canceled update was installed'
+        print(f'PASS: {mode} canceled, arming unlocked, original app unchanged.', flush=True)
     else:
         assert process.poll() == 3, 'Expected Sparkle to reject the tampered update'
         assert not result.exists() and info['CFBundleVersion'] == '1', 'Tampered update was installed'

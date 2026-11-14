@@ -1,30 +1,13 @@
 import AppKit
-import Sparkle
 
-/// An isolated test app. It has no power-management code and only updates itself.
-final class Driver: NSObject, SPUUserDriver {
-    private func log(_ message: String) { print(message); fflush(stdout) }
-    func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) { reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false)) }
-    func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) { log("Checking") }
-    func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) { log("Found update \(appcastItem.versionString)"); reply(.install) }
-    func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {}
-    func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
-    func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) { log("No update: \(error)"); acknowledgement(); exit(2) }
-    func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) { log("ERROR: \(error)"); acknowledgement(); exit(3) }
-    func showDownloadInitiated(cancellation: @escaping () -> Void) { log("Downloading") }
-    func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
-    func showDownloadDidReceiveData(ofLength length: UInt64) {}
-    func showDownloadDidStartExtractingUpdate() { log("Extracting") }
-    func showExtractionReceivedProgress(_ progress: Double) {}
-    func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) { log("Installing"); reply(.install) }
-    func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool, retryTerminatingApplication: @escaping () -> Void) { log("Terminated: \(applicationTerminated)") }
-    func showUpdateInstalledAndRelaunched(_ relaunched: Bool, acknowledgement: @escaping () -> Void) { log("Installed"); acknowledgement() }
-    func dismissUpdateInstallation() {}
-}
-
+/// Exercises the production user driver without any power-management code.
 final class Delegate: NSObject, NSApplicationDelegate {
-    let driver = Driver()
-    var updater: SPUUpdater!
+    var updater: UpdateController!
+    var timer: Timer?
+    let model = AppModel()
+    private var lastPhase: AppModel.UpdatePhase?
+    private var canceled = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String == "2" {
             let path = Bundle.main.object(forInfoDictionaryKey: "FixtureResultPath") as! String
@@ -32,9 +15,34 @@ final class Delegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        updater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: nil)
-        do { try updater.start() } catch { print(error); exit(4) }
+        updater = UpdateController(model: model, canUpdate: { true })
+        updater.start()
         updater.checkForUpdates()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] _ in
+            if lastPhase != model.updatePhase {
+                print("Update phase: \(model.updatePhase)"); fflush(stdout)
+                lastPhase = model.updatePhase
+            }
+            let mode = Bundle.main.object(forInfoDictionaryKey: "FixtureMode") as? String
+            if !canceled && ((mode == "cancel-check" && model.updatePhase == .checking) || (mode == "cancel-ready" && model.updatePhase == .ready)) {
+                canceled = true
+                updater.cancelUpdate()
+                return
+            }
+            if canceled && model.updatePhase == .idle {
+                precondition(!model.sessionActionDisabled)
+                let path = Bundle.main.object(forInfoDictionaryKey: "FixtureResultPath") as! String
+                try! "Canceled without reopening".write(toFile: path, atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
+            }
+            switch model.updatePhase {
+            case .available, .ready: updater.installUpdate()
+            case .failed: print("ERROR: \(model.updateStatus ?? "unknown")"); fflush(stdout); exit(3)
+            case .finished: print(model.updateStatus ?? "Finished without relaunch"); fflush(stdout); exit(2)
+            default: break
+            }
+        }
     }
 }
 

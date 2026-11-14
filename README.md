@@ -16,11 +16,11 @@ Keep working with your MacBook closed. A small native menu-bar app with no `sudo
 
 Reopen to end the session. **Cancel Arming**, **End Session**, and quitting restore normal lid handling. A live countdown shows the remaining time. Sessions stop at the chosen battery floor while unplugged or at critical temperature. Screen-lock settings stay unchanged.
 
-The popover uses native Liquid Glass controls on macOS 26+, a material fallback on older systems, and respects accessibility settings. Preferences include **Launch at Login**, Option-close, a confirmation sound, and a battery cutoff from 10–50% (default 15%). Startup always leaves normal sleep enabled. The default session limit remains eight hours.
+The popover uses native macOS controls and material, a high-contrast primary action, and respects accessibility settings. Preferences include **Launch at Login**, Option-close, a confirmation sound, and a battery cutoff from 10–50% (default 15%). Startup always leaves normal sleep enabled. The default session limit remains eight hours.
 
 ## Updates
 
-Choose **Check for Updates…**, or enable automatic checks in Preferences. [Sparkle](https://sparkle-project.org/) downloads updates from this repository's GitHub Releases, verifies the signed feed and archive, and handles replacement and relaunch. Installation asks first, and updates wait until any keep-awake session has ended. Automatic checks are off by default; no system profile is sent.
+Open **Updates** in the popover and choose **Check for Updates**, or enable automatic checks in Preferences. [Sparkle](https://sparkle-project.org/) downloads updates from this repository's GitHub Releases, verifies the signed feed and archive, and handles replacement and relaunch. Checks, download progress, cancellation, and Install & Restart stay inside the popover. Checks do not block arming; downloading and installation wait until your keep-awake session ends. Canceling or finishing an update makes arming available again. Automatic checks are off by default; no system profile is sent.
 
 **Upgrading from v0.1.x:** download this release manually once. Those versions don't contain the updater; v0.2.0 and later can update in the app.
 

@@ -16,7 +16,7 @@ The override is **system-wide, not owned by a connection**. Do not run alongside
 - Durations are bounded to 30 minutes, 1 hour, 2 hours, or 8 hours. Battery floors are bounded to 10, 15, 20, 25, 30, 40, or 50 percent. Invalid saved settings fall back to 8 hours and 15 percent.
 - Critical thermal state prevents arming as well as ending an existing session. Option-close is paused after a power error until a successful manual retry. The optional sound confirms arming; it does not prove the computer subsequently stayed awake.
 - Sensor sampling remains independent of the popover. Countdown presentation updates only while visible; the app doesn't run a decorative animation loop.
-- Sparkle 2.10.1 owns update checking, Ed25519 validation, installation, and relaunch. Both the feed and archive must be signed; archives are verified before extraction. Check/install attempts are gated on idle power state, and arming is blocked while an update cycle is in progress. Quitting still goes through sleep restoration. See [release operations](releasing.md).
+- Sparkle 2.10.1 owns update checking, Ed25519 validation, installation, and relaunch. Both the feed and archive must be signed; archives are verified before extraction. A custom user driver presents updates in the popover. Checks and update notices do not block arming; starting a download or installation requires idle power state and prevents new sessions until completion or cancellation. Sleep-restoration actions remain available. Quitting still goes through sleep restoration. See [release operations](releasing.md).
 
 ## Recovery
 
@@ -57,7 +57,7 @@ Hardware acceptance checklist (not automated):
 6. From an installed, signed app, toggle **Launch at Login** off/on and confirm the matching entry in System Settings. Reopen the menu after changing the setting externally, and verify the checkmark updates. Relaunch the app to confirm the setting persists and keep-awake starts disarmed.
 7. Exercise each duration and battery-floor preset; confirm a running session keeps its original limits. Check the countdown, recovery action, and optional arming sound.
 8. Check the UI on macOS 14/15 and 26+, in light/dark appearance and with Reduce Motion, Reduce Transparency, keyboard navigation, and VoiceOver. Verify display scaling and small-screen scrolling.
-9. Check for updates from an installed app. Confirm checks are deferred during sessions and that canceling an update makes arming available again.
+9. Check for updates from an installed app. Confirm checks leave arming available, downloading/installing waits until the session ends, and cancellation unlocks arming without reopening the popover. Confirm all update UI stays in the popover apart from any macOS authorization prompt.
 
 The maintainer has reported a successful closed-lid session on one Apple Silicon Mac. The full checklist above is not yet verified across supported macOS versions and hardware. Unit tests and read-only diagnostics do not establish closed-lid functionality.
 

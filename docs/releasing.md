@@ -34,7 +34,7 @@ bash scripts/sign-release.sh
 6. Commit the source, tag that commit, and push. Create the GitHub release with the versioned ZIP, its `.sha256`, and `appcast.xml` attached, then publish it as **Latest**. Never change an already published archive in place.
 7. Verify the public Latest feed and assets match the files just signed. Older v0.1.x apps need one manual upgrade because they have no updater.
 
-The app asks before installation. Automatic checking is opt-in, and the app does not send a system profile. A session prevents checking/installing; an update cycle prevents arming. Normal termination still restores sleep before allowing the process to exit.
+The app asks before installation. Automatic checking is opt-in, and the app does not send a system profile. Checks and available-update notices do not block arming. Starting a download or installation requires an idle session and blocks new arming until the update finishes or cancellation completes. Cancel Arming, End Session, and Retry Restore Sleep remain available. The custom Sparkle user driver renders progress and errors in the popover and immediately acknowledges errors, so a hidden dialog cannot keep controls locked. Normal termination still restores sleep before allowing the process to exit.
 
 ## Tests without power changes
 
@@ -47,19 +47,24 @@ bash scripts/testing/build-ui-preview.sh
 open ".build/ui-preview/LidLessPreview.app"
 ```
 
-Its main button cycles through idle → armed → active → recovery → idle for inspection. Real application actions retain their normal behavior. Review light/dark appearance, focus, controls, scrolling, and accessible labels.
+Its main button toggles idle and armed for layout inspection. Pass `--update-ready` to preview the restart controls. Real application actions retain their normal behavior. Review light/dark appearance, focus, controls, scrolling, and accessible labels.
 
 The integration fixture proves that ad-hoc-signed apps can be replaced and relaunched through this Sparkle distribution. It uses a unique bundle identifier, disposable copies under `.build`, a loopback HTTP server, and the signing account in Keychain. It never replaces `/Applications/Lid Less.app`. The local HTTP exception exists only in the fixture; production uses HTTPS.
 
 ```sh
 bash scripts/build-app.sh "$PWD/.build/preview/Lid Less.app"
 swiftc -parse-as-library scripts/testing/UpdateFixture.swift \
+  Sources/LidLess/AppModel.swift Sources/LidLess/UpdateController.swift \
+  -I "$(swift build -c release --show-bin-path)" \
+  "$(swift build -c release --show-bin-path)/LidLessCore.o" \
   -F '.build/preview/Lid Less.app/Contents/Frameworks' -framework Sparkle \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   -o .build/update-fixture
 python3 scripts/testing/test-update.py
 python3 scripts/testing/test-update.py bad-feed
 python3 scripts/testing/test-update.py bad-archive
+python3 scripts/testing/test-update.py cancel-check
+python3 scripts/testing/test-update.py cancel-ready
 ```
 
 The success case checks that version 2 replaces version 1 and actually relaunches. The tamper cases require a Sparkle error and verify the original version remains installed. Logs and fixtures remain in the printed `.build/update-test.*` directory for diagnosis. Real hardware lid-close behavior and Apple notarization are outside these tests.

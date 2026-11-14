@@ -6,6 +6,7 @@ import ServiceManagement
 /// Presentation state only. Power requests stay in SessionController and its worker.
 final class AppModel: ObservableObject {
     enum Phase: String, CaseIterable { case idle, armed, active, recovery }
+    enum UpdatePhase { case idle, checking, available, downloading, extracting, ready, installing, finished, failed }
     @Published var phase: Phase = .idle
     @Published var secondsRemaining = 0
     @Published var message = "Normal lid-close sleep"
@@ -19,7 +20,12 @@ final class AppModel: ObservableObject {
     @Published var canCheckForUpdates = true
     @Published var automaticUpdates = false
     @Published var updateStatus: String?
-    @Published var isUpdating = false
+    @Published var updatePhase: UpdatePhase = .idle
+    @Published var showUpdates = false
+    @Published var updateVersion = ""
+    @Published var updateProgress: Double?
+    @Published var canCancelUpdate = false
+    @Published var canInstallUpdate = false
     @Published var duration: Double { didSet { defaults.set(duration, forKey: "sessionDuration") } }
     @Published var batteryFloor: Int { didSet { defaults.set(batteryFloor, forKey: "batteryFloor") } }
     @Published var gestureEnabled: Bool { didSet { defaults.set(gestureEnabled, forKey: "gestureEnabled") } }
@@ -31,6 +37,8 @@ final class AppModel: ObservableObject {
     var changeLogin: () -> Void = {}
     var openLoginSettings: () -> Void = {}
     var checkForUpdates: () -> Void = {}
+    var installUpdate: () -> Void = {}
+    var cancelUpdate: () -> Void = {}
     var changeAutomaticUpdates: (Bool) -> Void = { _ in }
     var quit: () -> Void = {}
     var copyDiagnostics: () -> Void = {}
@@ -52,6 +60,23 @@ final class AppModel: ObservableObject {
     }
 
     var settings: SessionSettings { SessionSettings(duration: duration, batteryFloor: batteryFloor) }
+    var updateBlocksArming: Bool {
+        [.downloading, .extracting, .ready, .installing].contains(updatePhase)
+    }
+    var sessionActionDisabled: Bool { phase == .idle && updateBlocksArming }
+    var updateTitle: String {
+        switch updatePhase {
+        case .idle: return "Keep Lid Less up to date."
+        case .checking: return "Checking for updates…"
+        case .available: return "Lid Less \(updateVersion) is available."
+        case .downloading: return "Downloading update…"
+        case .extracting: return "Preparing update…"
+        case .ready: return "Ready to restart."
+        case .installing: return "Restarting Lid Less…"
+        case .finished: return "Check complete."
+        case .failed: return "Update couldn’t complete."
+        }
+    }
     var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development" }
     var title: String {
         switch phase {
