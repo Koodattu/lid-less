@@ -1,30 +1,40 @@
 # Lid Less
 
-Keep your MacBook working with the lid closed. A tiny native menu bar app with no `sudo`, no privileged helper, and no dependencies.
+Keep working with your MacBook closed. A small native menu-bar app with no `sudo`, no privileged sleep helper, and no subscription.
 
-**[Download the latest release](https://github.com/Koodattu/lid-less/releases/latest)** · macOS 14+ · Apple Silicon
+**[Download the latest release](https://github.com/Koodattu/lid-less/releases/latest)** · Apple Silicon · macOS 14+
 
-## Get started
+<img src="docs/images/session.png" width="356" alt="Lid Less session controls" /> <img src="docs/images/preferences.png" width="356" alt="Lid Less preferences" />
 
-1. Download the ZIP from [Releases](https://github.com/Koodattu/lid-less/releases/latest), unzip it, and move **Lid Less.app** to Applications.
-2. Open the app and click the laptop icon in the menu bar.
-3. Choose **Arm for Next Close**, then close the lid within 60 seconds. On Macs with a readable lid-angle sensor, you can also hold **⌥ Option** while slowly lowering the lid.
+*Native interface preview with simulated session and battery values.*
 
-Reopen the lid to end the session, or choose **Disarm / Restore Sleep**. Quitting also restores normal lid handling. Sessions stop after eight hours, at 15% battery while unplugged, or at critical temperature. Screen-lock settings stay unchanged.
+## Close with confidence
 
-Enable **Launch at Login** in the menu to start Lid Less automatically when you sign in. It starts disarmed. If the menu shows **Approval Required**, choose **Open Login Settings…** to allow it in macOS. Click the toggle again to turn automatic launching off.
+1. Unzip the download and move **Lid Less.app** to Applications.
+2. Open the menu-bar icon, pick **30 min**, **1 hr**, **2 hr**, or **8 hr**, then choose **Arm for Next Close**.
+3. Close within 60 seconds. On Macs with a readable lid-angle sensor, you can also hold **⌥ Option** while lowering the lid.
 
-The download is ad-hoc signed, **not Apple-notarized**. If macOS blocks it, see [Apple's instructions for opening an app you trust](https://support.apple.com/en-us/102445), or build from source below.
+Reopen to end the session. **Cancel Arming**, **End Session**, and quitting restore normal lid handling. A live countdown shows the remaining time. Sessions stop at the chosen battery floor while unplugged or at critical temperature. Screen-lock settings stay unchanged.
 
-## Compatibility
+The popover uses native Liquid Glass controls on macOS 26+, a material fallback on older systems, and respects accessibility settings. Preferences include **Launch at Login**, Option-close, a confirmation sound, and a battery cutoff from 10–50% (default 15%). Startup always leaves normal sleep enabled. The default session limit remains eight hours.
 
-Closed-lid operation has been confirmed by the maintainer on one Apple Silicon Mac. This is an early release using an undocumented IOKit control; other hardware and macOS versions still need testing. Option-close requires a readable lid-angle sensor; manual arming does not.
+## Updates
 
-Use on a ventilated surface, not inside a bag. Avoid running alongside other lid-sleep utilities: the override is shared system state. If restoration fails, quit the app and follow the [recovery instructions](docs/technical-notes.md#recovery), or restart your Mac.
+Choose **Check for Updates…**, or enable automatic checks in Preferences. [Sparkle](https://sparkle-project.org/) downloads updates from this repository's GitHub Releases, verifies the signed feed and archive, and handles replacement and relaunch. Installation asks first, and updates wait until any keep-awake session has ended. Automatic checks are off by default; no system profile is sent.
 
-## Build from source
+**Upgrading from v0.1.x:** download this release manually once. Those versions don't contain the updater; v0.2.0 and later can update in the app.
 
-Requires Xcode or Swift command-line tools with Swift 5.9+.
+Downloads are ad-hoc signed, **not Apple-notarized**. Sparkle's update signatures are separate from Apple notarization. If macOS blocks the initial download, follow [Apple's instructions for opening an app you trust](https://support.apple.com/en-us/102445), or build from source.
+
+## Compatibility and recovery
+
+Closed-lid operation has been confirmed by the maintainer on one Apple Silicon Mac. It uses an undocumented IOKit control; other hardware and OS versions still need testing. A successful power request isn't proof that a particular Mac stayed awake. Manual arming works without the lid-angle sensor.
+
+Use a ventilated surface, not a bag. Avoid running alongside other lid-sleep utilities: the override is shared system state. If recovery fails, choose **Retry Restore Sleep**, follow the [recovery instructions](docs/technical-notes.md#recovery), or restart your Mac. **About → Copy diagnostics** creates a short report you can paste into an issue.
+
+## Build
+
+Requires Xcode 26+ or a compatible Swift toolchain and macOS SDK. The built app supports macOS 14+. Sparkle is the only third-party runtime dependency, pinned in `Package.resolved`.
 
 ```sh
 git clone https://github.com/Koodattu/lid-less.git
@@ -33,8 +43,8 @@ bash scripts/build-app.sh
 open ".build/Lid Less.app"
 ```
 
-Run `swift test` for the lifecycle tests. Run `bash scripts/package-release.sh` to create a ZIP and SHA-256 checksum in `dist/` for your Mac's architecture. Release builds are attached to GitHub Releases.
+Run `swift test` for lifecycle, preferences, and update-gating tests. `bash scripts/package-release.sh` creates an app ZIP and SHA-256 checksum. See [release signing and update tests](docs/releasing.md) before publishing a new version.
 
-[Implementation, diagnostics, and hardware tests](docs/technical-notes.md) · [Apache 2.0 license](LICENSE)
+[Technical notes and hardware checklist](docs/technical-notes.md) · [Apache 2.0 license](LICENSE)
 
-Inspired by [Clamshell](https://clamshell.dev/). Independently implemented using Apple's IOKit APIs.
+Inspired by [Clamshell](https://clamshell.dev/). Independently implemented using Apple's IOKit APIs. Sparkle is distributed under its [MIT license](https://github.com/sparkle-project/Sparkle/blob/2.x/LICENSE), included in the app.

@@ -9,6 +9,15 @@
 
 The override is **system-wide, not owned by a connection**. Do not run alongside another lid-sleep utility. It has no reliable public getter for the original override bit; clearing it restores normal policy, not an arbitrary pre-existing override. `AppleClamshellCausesSleep` is not an ownership/readback guarantee. A crash of both processes, a stuck process, or OS refusal can still leave the override set until recovery or restart.
 
+## Interface and session policy
+
+- The AppKit status item hosts a SwiftUI popover. Idle, armed, active, and recovery states have distinct symbols and actions. The primary button uses native Liquid Glass on macOS 26+; older systems use a bordered button. Custom motion respects Reduce Motion, and the surface respects Reduce Transparency.
+- Preferences persist in UserDefaults. A session snapshots its duration and battery floor at arming; changes affect the next session. Limits stay disabled in the UI while a session is running.
+- Durations are bounded to 30 minutes, 1 hour, 2 hours, or 8 hours. Battery floors are bounded to 10, 15, 20, 25, 30, 40, or 50 percent. Invalid saved settings fall back to 8 hours and 15 percent.
+- Critical thermal state prevents arming as well as ending an existing session. Option-close is paused after a power error until a successful manual retry. The optional sound confirms arming; it does not prove the computer subsequently stayed awake.
+- Sensor sampling remains independent of the popover. Countdown presentation updates only while visible; the app doesn't run a decorative animation loop.
+- Sparkle 2.10.1 owns update checking, Ed25519 validation, installation, and relaunch. Both the feed and archive must be signed; archives are verified before extraction. Check/install attempts are gated on idle power state, and arming is blocked while an update cycle is in progress. Quitting still goes through sleep restoration. See [release operations](releasing.md).
+
 ## Recovery
 
 Quit Lid Less and stop other lid-sleep utilities, then run:
@@ -42,9 +51,14 @@ Hardware acceptance checklist (not automated):
 
 1. Disconnect external displays and quit other keep-awake apps. Start a timestamp loop in Terminal: `while true; do date -u; sleep 1; done`. Do not use `caffeinate` for this test.
 2. Arm manually, close the lid for 30–60 seconds, then reopen. Check for a timestamp gap and sleep events using `pmset -g log`. Repeat on battery and AC. A large gap means the override did not work on this configuration.
-3. Confirm the menu returns to normal after reopening and that `pmset -g assertions` no longer lists a Lid Less assertion. Close normally without arming and verify normal sleep returns.
+3. Confirm the popover returns to normal after reopening and that `pmset -g assertions` no longer lists a Lid Less assertion. Close normally without arming and verify normal sleep returns.
 4. Test Option-close with a slow close, then an aborted close (arming should expire). Test plugging/unplugging power during a session.
 5. With the lid open, arm and force-quit only the menu bar process. Verify the child exits and normal lid-close sleep returns. Repeat by terminating only the `--hold-worker` child; the UI should restore and report the failure.
 6. From an installed, signed app, toggle **Launch at Login** off/on and confirm the matching entry in System Settings. Reopen the menu after changing the setting externally, and verify the checkmark updates. Relaunch the app to confirm the setting persists and keep-awake starts disarmed.
+7. Exercise each duration and battery-floor preset; confirm a running session keeps its original limits. Check the countdown, recovery action, and optional arming sound.
+8. Check the UI on macOS 14/15 and 26+, in light/dark appearance and with Reduce Motion, Reduce Transparency, keyboard navigation, and VoiceOver. Verify display scaling and small-screen scrolling.
+9. Check for updates from an installed app. Confirm checks are deferred during sessions and that canceling an update makes arming available again.
 
 The maintainer has reported a successful closed-lid session on one Apple Silicon Mac. The full checklist above is not yet verified across supported macOS versions and hardware. Unit tests and read-only diagnostics do not establish closed-lid functionality.
+
+Automated update installation and tamper tests use a disposable fixture app with a unique bundle identifier and localhost feed. They do not modify the installed app or invoke power-management APIs. Passing them does not replace real hardware sleep tests or certify Apple notarization.

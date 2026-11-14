@@ -175,3 +175,58 @@ final class SessionControllerTests: XCTestCase {
         XCTAssertNil(LidAngleSensor.decode([1, 0, 1]))
     }
 }
+
+extension SessionControllerTests {
+    func testSelectedDurationStartsWhenLidCloses() throws {
+        let power = FakePower()
+        let controller = SessionController(power: power)
+        controller.settings = SessionSettings(duration: 1_800, batteryFloor: 25)
+        try arm(controller)
+        try tick(controller, now: 45, closed: true)
+        XCTAssertEqual(controller.state, .active(until: 1_845))
+        try tick(controller, now: 1_844, closed: true)
+        XCTAssertEqual(power.stops, 0)
+        try tick(controller, now: 1_845, closed: true)
+        XCTAssertEqual(controller.state, .idle)
+        XCTAssertEqual(power.stops, 1)
+    }
+
+    func testRunningSessionKeepsItsOriginalLimits() throws {
+        let power = FakePower()
+        let controller = SessionController(power: power)
+        controller.settings = SessionSettings(duration: 3_600, batteryFloor: 30)
+        try arm(controller)
+        controller.settings = SessionSettings(duration: 28_800, batteryFloor: 10)
+        try tick(controller, closed: true)
+        XCTAssertEqual(controller.state, .active(until: 3_601))
+        try tick(controller, now: 2, closed: true, battery: 30, ac: false)
+        XCTAssertEqual(controller.state, .idle)
+        XCTAssertEqual(controller.message, "Stopped — battery at 30%")
+    }
+
+    func testCustomBatteryFloorPreventsArming() {
+        let power = FakePower()
+        let controller = SessionController(power: power)
+        controller.settings = SessionSettings(batteryFloor: 40)
+        XCTAssertThrowsError(try controller.arm(now: 0, lidClosed: false, batteryPercent: 40, onAC: false))
+        XCTAssertEqual(power.starts, 0)
+    }
+
+    func testCriticalTemperaturePreventsManualAndGestureArming() throws {
+        let power = FakePower()
+        let controller = SessionController(power: power)
+        XCTAssertThrowsError(try controller.arm(now: 0, lidClosed: false, batteryPercent: 80, onAC: true, thermalCritical: true))
+        try tick(controller, angle: 80, option: true, critical: true)
+        XCTAssertThrowsError(try tick(controller, angle: 60, option: true, critical: true))
+        XCTAssertEqual(power.starts, 0)
+    }
+
+    func testInvalidSavedSettingsFallBackToSafeDefaults() {
+        for duration in [0.0, -1, .infinity, .nan, 86_400] {
+            XCTAssertEqual(SessionSettings(duration: duration).duration, 28_800)
+        }
+        for floor in [-1, 0, 5, 99] {
+            XCTAssertEqual(SessionSettings(batteryFloor: floor).batteryFloor, 15)
+        }
+    }
+}
